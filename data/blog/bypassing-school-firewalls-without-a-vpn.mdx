@@ -1,0 +1,81 @@
+---
+title: 'Bypassing School Firewalls without a VPN'
+date: '2024-03-16'
+lastmod: '2024-03-16'
+tags: ['guide']
+draft: false
+summary: 'Learn how to bypass school website restrictions with a local proxy instead of a VPN. This has the benefit of no latency increase and no performance decrease in contrast to using a VPN, leading to better gaming performance.'
+images: ['/static/images/twitter-card.png']
+---
+## Introduction
+
+Many schools use firewalls to prevent students from accessing gaming related websites when using the school network. This has led many students to simply install a VPN. VPNs offer the ability to encrypt traffic, making it impossible for the firewall to know what site you're accessing. However, they come at a cost, and that is performance. All the data has to be encrypted, sent to somewhere in the Netherlands or the US, decrypted, sent to the server you're trying to access, and then the response from the server has to go through the same steps in reverse. This is quite a lot of overhead, resulting in increased latency (ping) and overall slower Internet speeds. If you just want to play in school, there is a much better alternative that we'll look at here.
+
+<TOCInline toc={props.toc} exclude="Introduction" />
+
+## How does it work?
+
+Essentially, you run a local proxy server through which all network requests are routed. This proxy server splits up some of these requests and reorders them so that the firewall doesn't interpret them correctly and lets them through. But servers don't have a problem with reordered requests, so they parse your request just fine. And since most of today's Internet is encrypted (https), only a few requests need to be modified.
+
+## Installation
+
+First you have to download the program I made. It's based on the great [DPITunnel-cli](https://github.com/nomoresat/DPITunnel-cli). You can get the binary from [here](https://github.com/kev1nbam27/DPITunnel/releases). Just pick the one that matches your architecture. If you don't know what that means, choose the one ending in x86. This program only runs on Linux because Windows removed the functionality it needs way back in Windows XP. But don't worry, there is a way to run Linux programs under Windows
+
+### Windows
+
+#### Installing the Proxy
+
+First, you need to install something called WSL (Windows Subsystem for Linux). To do this, right click on the Windows icon in the taskbar and select "Terminal (Admin)". Then type `wsl --install` and press Enter. This will install a small Linux subsystem. You may have to confirm some popups. If you're asked to choose a user name and password, do so. Note that the password you type won't be displayed, not even replaced by asterisks. If you aren't asked to choose a password, you will be asked to do so in the next step. Restart your computer and run WSL from the search bar. Now run the following command:
+
+```bash
+echo "`whoami` ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/`whoami` && sudo chmod 0440 /etc/sudoers.d/`whoami`
+```
+
+This will prevent you from having to enter the password every time the proxy server is started.
+
+Now press `Win` + `R` on your keyboard, type `C:\` and press Enter. This will open the File Explorer. Move the program you've downloaded to this location. Then press `Win` + `R` again and type `shell:startup`. In the opened folder, create a file called `dpitunnel.bat' (or something else, the name doesn't matter) and edit it with Notepad. Without this file, the proxy won't start automatically. Add the following to the file and save it (replace dpitunnel-cli-x86 with the name of the program you downloaded):
+
+```Powershell:dpitunnel.bat
+wsl sudo /mnt/c/dpitunnel-cli-x86 --desync-attacks=fake,disorder_fake --split-position=2 --auto-ttl=1-4-10 --min-ttl=3 --wsize=1 --wsfactor=6 --ip 127.0.0.1 --daemon
+```
+
+Then reboot your computer. If a terminal window opens saying "Proxy running on...", congratulations! If not, open WSL, run `cd /mnt/c && sudo chmod +x dpitunnel-cli-x86` and reboot. Now you've successfully installed the proxy!
+
+#### Configuring the Proxy
+
+All that's left to do now is to tell Windows to redirect it's network requests through our program. To do this, open Settings and navigate to the network settings. Click on proxy and then click on Edit under the manual proxy settings. Enter the following settings and save it:
+
+![Windows Proxy Configuration](/static/images/windows-proxy-config.png)
+
+That's it! You should now be able to access the blocked websites. You may read on if you want to know in detail how all of this works.
+
+### Linux
+
+On Linux, the installation process is quite a bit simpler. After downloading the program, you can either move it to a different directory or leave it where it is. Open a terminal in the location where you've put the program, and run the following command to make it executable `chmod +x dpitunnel-cli-x86`. Now run the program with the following command:
+
+```bash
+sudo ./dpitunnel-cli-x86 --desync-attacks=fake,disorder_fake --split-position=2 --auto-ttl=1-4-10 --min-ttl=3 --wsize=1 --wsfactor=6 --ip 127.0.0.1 --daemon
+```
+This will make the program run in the background so you can close the terminal. If you'd like it to start automatically at boot time, look up "linux autostart".
+
+To configure the proxy, look up how to set configure an http proxy for your specific distribution. You'll probably need to select the "manual" method and specify 127.0.0.1 as the ip and 8080 as the port.
+
+## Detailed Explanation
+
+There are two main ways for schools to restrict access to certain websites. They can either just block the IP addresses of the servers, or they can block the domains. The former has the advantage that our proxy wouldn't work, but it comes with the challenge of keeping the ip lists up to date, making sure not to block too much, keeping up with ip changes, and so on. This is why many choose the latter (and probably why it's the default method in Cisco devices used in some schools).
+
+But only HTTP(S) traffic can be blocked this way, because other protocols don't include the domain name in the requests, only the IP.
+
+An unencrypted HTTP request can be read by the firewall and might look like this:
+```text
+GET /explore HTTP/1.1
+Host: store.steampowered.com
+```
+
+As you (and the firewall) can see, the domain we're trying to access is included in the Host header. Without it, the server that might be hosting steamcommunity.com wouldn't know if you were trying to access store.steampowered.com or steamcommunity.com. Therefore, the firewall can easily block your request.
+
+With HTTPS (S stands for secure), this request is encrypted and can only be decrypted by you and the server. But to encrypt it, your computer and the server have to decide on a key to use. To do this, your computer sends a request (a TLS client hello) that includes a server name indicator (SNI). This value is similar to the Host header, it is in plain text and allows the server to use different keys for different websites it hosts. The firewall can read the SNI, block the request, and forge a response in which it impersonates the server and tells your computer that it can't handle your request at the moment and that it should abort the connection. Browsers will usually display an error message saying "The connection was reset" when this happens.
+
+What our proxy does is split the client hello request into two packets at the point where the SNI is, reorder them, and send them one at a time.The way our Internet is designed, the server won't have any problem putting them back in the right order. However, the firewall won't wait for our second packet to arrive, because that would make the network much slower. The Great Firewall of China does this, but it's overkill for schools. The firewall will just see the SNI as "store.ste", won't recognize it, and let it through.
+
+And that's how it works! If you have any questions, feel free to open a GitHub issue [here](https://github.com/kev1nbam27/DPITunnel/issues).
