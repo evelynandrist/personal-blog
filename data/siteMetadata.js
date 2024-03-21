@@ -2,7 +2,7 @@
 const siteMetadata = {
   title: 'QWT Blog',
   author: 'Human',
-  headerTitle: 'QWT',
+  headerTitle: '',
   description: 'A blog about tech related stuff.',
   language: 'en-us',
   theme: 'system', // system, dark or light
