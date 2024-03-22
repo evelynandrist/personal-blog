@@ -78,4 +78,4 @@ With HTTPS (S stands for secure), this request is encrypted and can only be decr
 
 What our proxy does is split the client hello request into two packets at the point where the SNI is, reorder them, and send them one at a time.The way our Internet is designed, the server won't have any problem putting them back in the right order. However, the firewall won't wait for our second packet to arrive, because that would make the network much slower. The Great Firewall of China does this, but it's overkill for schools. The firewall will just see the SNI as "store.ste", won't recognize it, and let it through.
 
-And that's how it works! If you have any questions, feel free to open a GitHub issue [here](https://github.com/kev1nbam27/DPITunnel/issues).
+And that's how it works! If you have any questions, feel free to leave a comment or open a GitHub issue [here](https://github.com/kev1nbam27/DPITunnel/issues).
