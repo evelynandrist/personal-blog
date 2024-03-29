@@ -1,0 +1,33 @@
+---
+title: 'Recreating the Star Wars Traceroute for IPv6'
+date: '2024-03-29'
+lastmod: '2024-03-29'
+tags: ['network']
+draft: false
+summary: 'Learn how I recreated a deprecated Star Wars networking easter egg on my server.'
+images: ['/static/images/starwars-traceroute.png']
+layout: PostBanner
+---
+
+<TOCInline toc={props.toc} />
+
+## Introduction
+
+Back in 2013, a bored network engineer created a great network easter egg. If you ran traceroute on his IP, it would return the text from the beginning of the opening sequence of Star Wars Episode IV as the reverse DNS lookups of the hops. If you don't know what traceroute is, it is a network diagnostic tool used to see the path a packet takes to reach a host. It displays each hop's IP along with its human-readable PTR record (PTR records are a way of assigning a hostname to an IP address). Unfortunately, due to the growing popularity of his [blog post](https://web.archive.org/web/20130214175909/http://beaglenetworks.net:80/post/42707829171/star-wars-traceroute), his server soon became the victim of several denial of service attacks and he had to take it down. I decided to try to recreate the easter egg on my server because I thought it was a shame. You can try it right now by running `traceroute -6 -I -m 100 obiwan.qwt.ch`.
+
+
+## Implementation
+
+The original one was done using two Cisco routers, a spare /24 IPv4 block, and private routing tables. I don't have access to any of these things, so I decided to use IPv6. IPv6 is the new version of IP, and unlike IPv4, which only has about $2^{32}$ available addresses, it allows for about $2^{128}$ unique addresses. Because of this, you're often assigned a full /64 prefix (so about $2^{64}$ available unique addresses) by your ISP. My hosting provider allows me to create PTR records for any IPv6 address in my /64 prefix, but only one at a time through the web interface, and I'm not allowed to add an rDNS zone (which would have allowed me to host my own rDNS server and automate the record creation). So the first thing I did was to manually create about 50 PTR records for ascending IP addresses.
+
+Then it was time to implement the network hops. At first I tried to implement real hops using many virtual network interfaces and static routes, but that turned out to be a lot more involved than I expected. Fortunately, I discovered Birk Blechschmidt's awesome [fakeroute](https://github.com/blechschmidt/fakeroute) Python script, which basically allows you to create fake hops. I modified the script a bit to suit my needs, you can find it [here](https://gist.github.com/kev1nbam27/d73a8da7186f89c7f473ae7526cb07c4).
+
+## Detailed Explanation
+
+Traceroute works by sending packets with increasing TTL (hop limit) values. This value is decremented at each router (hop) the packet passes, and when it reaches zero, the packet isn't forwarded and an Internet Control Message Protocol (ICMP) packet containing information about the router is returned instead. Increasing the TTL by 1 will pass that router, and the next router will return an ICMP packet. In this way, traceroute reconstructs the path a packet would take to a host.
+
+Now the trick is that we can also spoof these ICMP responses. Our script does this by first generating a list of ascending IP addresses that our hops should use. Then it sets up firewall rules to drop all IPv6 packets with a TTL lower than the number of hops we want to spoof, so that our operating system doesn't respond to these packets. It then listens on a raw socket for IPv6 packets, and if the TTL is less than the number of fake hops (meaning the packet should be handled by our script), it creates a spoofed reply originating from the appropriate fake hop's address. And because we use IPv6 addresses within our assigned prefix, the ISP won't block the spoofed packet.
+
+## Conclusion
+
+Recreating this little easter egg was a lot of fun. It's a shame there aren't many more of them around. The only others I know of are `openssl s_client -connect signed.bad.horse:443 -servername signed.bad.horse  < /dev/null` and `traceroute -m 60 bad.horse`. If you happen to find another obsolete easter egg, please let me know so I can try to recreate it. Feel free to share your thoughts on this by leaving a comment. And let's hope it doesn't get DoS'd into oblivion :)
