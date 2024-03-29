@@ -24,7 +24,9 @@ Then it was time to implement the network hops. At first I tried to implement re
 
 ## Detailed Explanation
 
-Traceroute works by sending packets with increasing TTL (hop limit) values. This value is decremented at each router (hop) the packet passes, and when it reaches zero, the packet isn't forwarded and an Internet Control Message Protocol (ICMP) packet containing information about the router is returned instead. Increasing the TTL by 1 will pass that router, and the next router will return an ICMP packet. In this way, traceroute reconstructs the path a packet would take to a host.
+Traceroute works by sending packets with increasing [TTL](https://www.cloudflare.com/learning/cdn/glossary/time-to-live-ttl/) (hop limit) values. This value is decremented at each router (hop) the packet passes, and when it reaches zero, the packet isn't forwarded and an Internet Control Message Protocol (ICMP) packet containing information about the router is returned instead. Increasing the TTL by 1 will pass that router, and the next router will return an ICMP packet. In this way, traceroute reconstructs the path a packet would take to a host.
+
+![ICMP Traceroute Diagram](/static/images/traceroute-diagram.webp)
 
 Now the trick is that we can also spoof these ICMP responses. Our script does this by first generating a list of ascending IP addresses that our hops should use. Then it sets up firewall rules to drop all IPv6 packets with a TTL lower than the number of hops we want to spoof, so that our operating system doesn't respond to these packets. It then listens on a raw socket for IPv6 packets, and if the TTL is less than the number of fake hops (meaning the packet should be handled by our script), it creates a spoofed reply originating from the appropriate fake hop's address. And because we use IPv6 addresses within our assigned prefix, the ISP won't block the spoofed packet.
 
